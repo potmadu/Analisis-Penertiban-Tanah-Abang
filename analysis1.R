@@ -11,13 +11,17 @@ library(geosphere);
 library(dplyr);
 
 working_directory = "F:/Github/Analisis-Penertiban-Tanah-Abang/";
+working_directory2 = "C:/Users/Fox/Documents/GitHub/Analisis-Penertiban-Tanah-Abang/";
 
-setwd(working_directory);
+setwd(working_directory2);
 
 pasar_tanahabang = c(106.814535,-6.187611);
 
 alerts = dbGetQuery(conn,"select * from sor.waze_alerts where date_id>=20171001 and city in ('Jakarta Pusat')");
-jams = dbGetQuery(conn,"select distinct street,roadtype,city,line_x,line_y,delay,pubmillis from (select distinct street,roadtype,city,line_x,line_y,delay,pubmillis from sor.waze_jams where date_id>=20171001 and city in ('Jakarta Pusat')) t1");
+jams = dbGetQuery(conn,"select distinct street,roadtype,city,line_x,line_y,delay,pubmillis from (select distinct street,roadtype,city,line_x,line_y,delay,pubmillis from sor.waze_jams where date_id>=20171028 and city in ('Jakarta Pusat')) t1");
+
+alerts_29 = dbGetQuery(conn,"select * from sor.waze_alerts where date_id>20171028 and city in ('Jakarta Pusat')");
+jams_29 = dbGetQuery(conn,"select distinct street,roadtype,city,line_x,line_y,delay,pubmillis from (select distinct street,roadtype,city,line_x,line_y,delay,pubmillis from sor.waze_jams where date_id>20171028 and city in ('Jakarta Pusat')) t1");
 
 alerts$line_x = as.numeric(alerts$waze_alerts.location_x);
 alerts$line_y = as.numeric(alerts$waze_alerts.location_y);
@@ -52,12 +56,15 @@ chunk.size = ceiling(nrow(alerts)/cores);
 total.chunk.size = cores * chunk.size;
 diff.chunk = total.chunk.size - nrow(alerts);
 
-for(i in 1:diff.chunk){
+added_data = 0;
 
-	alerts = rbind(alerts,alerts[1,])
-
+if(diff.chunk>0){
+	for(i in 1:diff.chunk){
+		alerts = rbind(alerts,alerts[1,]);
+		added_data=added_data+1;
+	}
 }
- 
+
 start_time = Sys.time();
 
  res2.p = foreach(i=1:cores, .combine='rbind', .packages='geosphere') %dopar%
@@ -72,10 +79,16 @@ start_time = Sys.time();
 end_time = Sys.time();
 end_time - start_time;
 
+if(diff.chunk>0){
+	for(i in 1:diff.chunk){
+		res2.p = res2.p[-nrow(res2.p),];
+	}
+}
+
 alerts$distance = res2.p;
 
-stopImplicitCluster()
-stopCluster(cl)
+stopImplicitCluster();
+stopCluster(cl);
 
 return(alerts);
 
@@ -85,9 +98,12 @@ alerts_dist = calc_distance_parallel(alerts,pasar_tanahabang);
 jams_dist = calc_distance_parallel(jams,pasar_tanahabang);
 
 for(i in 1:diff.chunk){
-	alerts = alerts[-nrow(alerts),];
+	alerts_dist = alerts_dist[-nrow(alerts_dist),];
 }
 
+for(i in 1:diff.chunk){
+	jams_dist = jams_dist[-nrow(jams_dist),];
+}
 
 #####################################################
 ## FILTERING RADIUS 1 KM
