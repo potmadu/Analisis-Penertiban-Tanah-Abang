@@ -290,7 +290,7 @@ for(i in 1:length(streets)){
 ## GENERATE HOTSPOT
 #####################################################
 
-calc_kerneldensity_diggle_512_multi = function(input,overlay){
+calc_kerneldensity_diggle_512_multi = function(input,overlay,params){
 
 	alerts2 = input;
 
@@ -307,7 +307,7 @@ calc_kerneldensity_diggle_512_multi = function(input,overlay){
 
 	alerts_level = remove.duplicates(alerts_level);
 
-	window = as.owin(map_wgs84,step=10);
+	window = as.owin(map_wgs84);
 	Alerts.ppp = ppp(x=alerts_level@coords[,1],y=alerts_level@coords[,2],window=window,dimyx=c(512,512));
 
 	den = density.ppp(Alerts.ppp, sigma = bw.diggle(Alerts.ppp),edge=T);
@@ -318,7 +318,10 @@ calc_kerneldensity_diggle_512_multi = function(input,overlay){
 
 }
 
-output = calc_kerneldensity_diggle_512_multi(alerts_jams_1km,e);
+spatstat.options(npixel=1024);
+
+output_1000000 = calc_kerneldensity_diggle_512_multi(alerts_jams_1km,e);
+output_1000 = calc_kerneldensity_diggle_512_multi(alerts_jams_1km,e);
 
 output_df = as.data.frame(output);
 den95 = quantile(output_df$value,0.95);
@@ -327,7 +330,7 @@ den95_2 = quantile(output_95$value,0.95);
 output_95_2 = output_95 %>% filter(value>=den95_2) %>% as.data.frame();
 write.csv(output_df,"jams_pattern_okt.csv",row.names=FALSE);
 
-DBSCAN1 = dbscan(cbind(output_95_2$x, output_95_2$y), eps = 0.00075, minPts = 3);
+DBSCAN1 = dbscan(cbind(output_95_2$x, output_95_2$y), eps = 0.0002, minPts = 3);
 output_95_2$cluster = DBSCAN1$cluster;
 
 write.csv(output_95_2,"jams_pattern_okt_95.csv",row.names=FALSE);
