@@ -85,7 +85,7 @@ if(diff.chunk>0){
 	}
 }
 
-alerts$distance = res2.p;
+alerts$jarak = res2.p[,1];
 
 stopImplicitCluster();
 stopCluster(cl);
@@ -97,14 +97,6 @@ return(alerts);
 alerts_dist = calc_distance_parallel(alerts,pasar_tanahabang);
 jams_dist = calc_distance_parallel(jams,pasar_tanahabang);
 
-for(i in 1:diff.chunk){
-	alerts_dist = alerts_dist[-nrow(alerts_dist),];
-}
-
-for(i in 1:diff.chunk){
-	jams_dist = jams_dist[-nrow(jams_dist),];
-}
-
 #####################################################
 ## FILTERING RADIUS 1 KM
 #####################################################
@@ -113,12 +105,10 @@ jams_distance = calc_distance_parallel(jams,loc);
 alerts_distance = calc_distance_parallel(alerts,loc);
 
 jams_1km = jams_dist %>%
-select(-distance) %>%
 filter(jarak<=1000) %>%
 as.data.frame();
 
 alerts_1km = alerts_dist %>%
-select(-distance) %>%
 filter(jarak<=1000) %>%
 as.data.frame();
 
