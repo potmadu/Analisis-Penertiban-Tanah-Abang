@@ -308,7 +308,7 @@ calc_kerneldensity_diggle_512_multi = function(input,overlay,params){
 	alerts_level = remove.duplicates(alerts_level);
 
 	window = as.owin(map_wgs84);
-	Alerts.ppp = ppp(x=alerts_level@coords[,1],y=alerts_level@coords[,2],window=window,dimyx=c(512,512));
+	Alerts.ppp = ppp(x=alerts_level@coords[,1],y=alerts_level@coords[,2],window=window,dimyx=params);
 
 	den = density.ppp(Alerts.ppp, sigma = bw.diggle(Alerts.ppp),edge=T);
 
@@ -320,8 +320,13 @@ calc_kerneldensity_diggle_512_multi = function(input,overlay,params){
 
 spatstat.options(npixel=1024);
 
-output_1000000 = calc_kerneldensity_diggle_512_multi(alerts_jams_1km,e);
-output_1000 = calc_kerneldensity_diggle_512_multi(alerts_jams_1km,e);
+output1 = calc_kerneldensity_diggle_512_multi(alerts_jams_1km,e,c(1024,1024));
+output2 = calc_kerneldensity_diggle_512_multi(alerts_jams_1km,e,c(128,128));
+
+den = density.ppp(Alerts.ppp, sigma = bw.ppl(Alerts.ppp),edge=T);
+
+write.csv(as.data.frame(output1),"output1.csv",row.names=FALSE);
+write.csv(as.data.frame(output2),"output2.csv",row.names=FALSE);
 
 output_df = as.data.frame(output);
 den95 = quantile(output_df$value,0.95);
