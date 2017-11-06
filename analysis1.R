@@ -12,8 +12,9 @@ library(dplyr);
 
 working_directory = "F:/Github/Analisis-Penertiban-Tanah-Abang/";
 working_directory2 = "C:/Users/Fox/Documents/GitHub/Analisis-Penertiban-Tanah-Abang/";
+working_directory_server = "C:/Users/data/Documents";
 
-setwd(working_directory2);
+setwd(working_directory_server);
 
 pasar_tanahabang = c(106.814535,-6.187611);
 
@@ -23,21 +24,28 @@ jams = dbGetQuery(conn,"select distinct street,roadtype,city,line_x,line_y,delay
 alerts_29 = dbGetQuery(conn,"select * from sor.waze_alerts where date_id>20171028 and city in ('Jakarta Pusat')");
 jams_29 = dbGetQuery(conn,"select distinct street,roadtype,city,line_x,line_y,delay,pubmillis from (select distinct street,roadtype,city,line_x,line_y,delay,pubmillis from sor.waze_jams where date_id>20171028 and city in ('Jakarta Pusat')) t1");
 
-alerts$line_x = as.numeric(alerts$waze_alerts.location_x);
-alerts$line_y = as.numeric(alerts$waze_alerts.location_y);
-alerts$pubmillis = as.numeric(alerts$waze_alerts.pubmillis);
+jams_wrangling = function(jams){
 
-jams$line_x = as.numeric(jams$line_x);
-jams$line_y = as.numeric(jams$line_y);
-jams$pubmillis = as.numeric(jams$pubmillis);
+	jams$line_x = as.numeric(jams$line_x);
+	jams$line_y = as.numeric(jams$line_y);
+	jams$pubmillis = as.numeric(jams$pubmillis);
 
-jams = jams %>%
-rowwise() %>%
-mutate(distance=distGeo(c(line_x,line_y),pasar_tanahabang));
+	return(jams);
 
-alerts = alerts %>%
-rowwise() %>%
-mutate(distance=distGeo(c(line_x,line_y),pasar_tanahabang));
+}
+
+alerts_wrangling = function(alerts){
+
+	alerts$line_x = as.numeric(alerts$waze_alerts.location_x);
+	alerts$line_y = as.numeric(alerts$waze_alerts.location_y);
+	alerts$pubmillis = as.numeric(alerts$waze_alerts.pubmillis);
+
+	return(alerts);
+
+}
+
+alerts_29 = alerts_wrangling(alerts_29);
+jams_29 = jams_wrangling(jams_29);
 
 #####################################################
 ## CALCULATE DISTANCE FROM EPICENTRUM
@@ -51,6 +59,8 @@ calc_distance_parallel = function(alerts,loc){
 cores = detectCores(logical = FALSE)-1;
 cl = makeCluster(cores);
 registerDoParallel(cl, cores=cores);
+
+output = alerts;
  
 chunk.size = ceiling(nrow(alerts)/cores);
 total.chunk.size = cores * chunk.size;
@@ -80,52 +90,62 @@ end_time = Sys.time();
 end_time - start_time;
 
 if(diff.chunk>0){
-	for(i in 1:diff.chunk){
-		res2.p = res2.p[-nrow(res2.p),];
-	}
+		res2.p = res2.p[-((nrow(res2.p)-diff.chunk)+1:nrow(res2.p)),];
 }
 
-alerts$jarak = res2.p[,1];
+output$jarak = res2.p;
 
 stopImplicitCluster();
 stopCluster(cl);
 
-return(alerts);
+return(output);
 
 }
 
-alerts_dist = calc_distance_parallel(alerts,pasar_tanahabang);
-jams_dist = calc_distance_parallel(jams,pasar_tanahabang);
+alerts_dist = calc_distance_parallel(alerts_29,pasar_tanahabang);
+jams_dist = calc_distance_parallel(jams_29,pasar_tanahabang);
 
 #####################################################
 ## FILTERING RADIUS 1 KM
 #####################################################
 
-jams_distance = calc_distance_parallel(jams,loc);
-alerts_distance = calc_distance_parallel(alerts,loc);
+filtering_1km = function(alerts_1km){
 
-jams_1km = jams_dist %>%
-filter(jarak<=1000) %>%
-as.data.frame();
+	library(dplyr);
 
-alerts_1km = alerts_dist %>%
-filter(jarak<=1000) %>%
-as.data.frame();
+	alerts_1km = alerts_dist %>%
+	filter(jarak<=1000) %>%
+	as.data.frame();
 
-library(lubridate);
+	library(lubridate);
 
-jams_1km$Waktu = as_datetime(jams_1km$pubmillis/1000,tz=Sys.timezone());
-jams_1km$weekday = wday(jams_1km$Waktu,label=TRUE);
-jams_1km$hour = hour(jams_1km$Waktu);
-jams_1km$yday = yday(jams_1km$Waktu);
+	alerts_1km$Waktu = as_datetime(alerts_1km$pubmillis/1000,tz=Sys.timezone());
+	alerts_1km$weekday = wday(alerts_1km$Waktu,label=TRUE);
+	alerts_1km$hour = hour(alerts_1km$Waktu);
+	alerts_1km$yday = yday(alerts_1km$Waktu);
+	alerts_1km$week = week(alerts_1km$Waktu);
+	alerts_1km$waktu = as.character(alerts_1km$Waktu);
 
-alerts_1km$Waktu = as_datetime(alerts_1km$pubmillis/1000,tz=Sys.timezone());
-alerts_1km$weekday = wday(alerts_1km$Waktu,label=TRUE);
-alerts_1km$hour = hour(alerts_1km$Waktu);
-alerts_1km$yday = yday(alerts_1km$Waktu);
-alerts_1km$week = week(alerts_1km$Waktu);
+	return(alerts_1km);
 
-alerts_1km$waktu = as.character(alerts_1km$Waktu);
+}
+
+jams_1km = filtering_1km(jams_dist);
+alerts_1km = filtering_1km(alerts_dist);
+
+#####################################################
+## INTEGRATION
+#####################################################
+
+sample1 = read.csv("alerts_1km.csv",stringsAsFactors=FALSE);
+sample2 = read.csv("alerts29_1km.csv",stringsAsFactors=FALSE);
+
+sample2$jenis = "analisis2";
+sample1$jenis = "analisis1";
+
+sample = rbind(sample1,sample2);
+
+write.csv(sample,"sample.csv",row.names=FALSE);
 
 #####################################################
 ## CALCULATE KERNEL DENSITY
@@ -286,6 +306,7 @@ for(i in 1:length(streets)){
 	}
 }
 
+
 #####################################################
 ## GENERATE HOTSPOT
 #####################################################
@@ -339,6 +360,14 @@ DBSCAN1 = dbscan(cbind(output_95_2$x, output_95_2$y), eps = 0.0002, minPts = 3);
 output_95_2$cluster = DBSCAN1$cluster;
 
 write.csv(output_95_2,"jams_pattern_okt_95.csv",row.names=FALSE);
+
+jams = jams %>%
+rowwise() %>%
+mutate(distance=distGeo(c(line_x,line_y),pasar_tanahabang));
+
+alerts = alerts %>%
+rowwise() %>%
+mutate(distance=distGeo(c(line_x,line_y),pasar_tanahabang));
 
 
 
